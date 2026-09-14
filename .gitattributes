@@ -1,0 +1,23 @@
+# Akhiran baris dikunci di sini karena project ini hidup di DUA sistem:
+# ditulis di Windows, dijalankan di VPS Linux.
+#
+# Tanpa berkas ini, Git di Windows mengubah LF menjadi CRLF saat menyentuh
+# berkas. Untuk .py hal itu tidak terasa, tapi untuk jalankan.sh berakibat
+# fatal: bash Linux membaca CR di akhir baris sebagai bagian dari perintah,
+# lalu gagal dengan pesan yang menyesatkan seperti
+#   "/usr/bin/env: 'bash\r': No such file or directory"
+# Kesalahan ini pernah terjadi sekali di project ini dan sulit dilacak.
+
+*.sh    text eol=lf
+*.py    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# Berkas .bat hanya dipakai di Windows dan memang perlu CRLF.
+*.bat   text eol=crlf
+
+# Jangan pernah diutak-atik.
+*.pdf   binary
+*.db    binary

@@ -1,0 +1,287 @@
+# Pengaturan Robot Analisis Forex
+#
+# Robot ini KHUSUS forex. Crypto dan futures diurus robot lain
+# (folder "Robot Trading Crypto dan Forex", di VPS: ~/robot-crypto) yang
+# punya config dan database sendiri.
+#
+# Bagian crypto: dan futures: sengaja TIDAK ADA di sini. Kode membaca pasar
+# lewat cfg.get(nama_pasar, {}).get("aktif", False), jadi pasar yang tidak
+# ditulis otomatis tidak pernah disentuh — tidak perlu dimatikan satu per satu.
+#
+# PERINGATAN: mengubah-ubah angka di bawah berkali-kali sampai hasil backtest
+# terlihat bagus hampir selalu berarti Anda menemukan kebetulan, bukan strategi.
+
+timeframe: harian            # "harian", "4jam", atau "1jam"
+
+take_profit_rasio: 3
+
+strategi_aktif: ikut_tren
+# Dipilih karena ini SATU-SATUNYA strategi yang pernah lolos aturan penerimaan
+# di forex: menang di periode lama DAN periode baru. Besarnya pun jujur saja
+# kecil — 0,47%/tahun lalu 0,10%/tahun, di bawah bunga deposito. Lolos secara
+# statistik, tapi belum tentu berarti secara ekonomi.
+
+forex:
+  aktif: true
+  dua_arah: true             # boleh membuka posisi jual, bukan hanya beli
+  # "pip" = satuan gerak terkecil yang lazim disebut untuk pasangan itu.
+  # "spread_pip" = selisih harga beli-jual broker Anda. Ubah sesuai broker.
+  #
+  # Dipersempit jadi dua simbol pada 12 September 2026 atas permintaan:
+  # emas dan GBPUSD saja.
+  watchlist:
+    # EMAS. Ini pengganti XAUUSD.
+    #
+    # XAUUSD=X, XAU=X, dan XAUUSD TIDAK ADA di Yahoo Finance — ketiganya
+    # sudah diuji langsung dan hasilnya kosong. Yang tersedia:
+    #   GC=F  emas berjangka COMEX, harga 4.390/ons  <- dipakai, setara XAUUSD
+    #   GLD   ETF emas, harga 399   (bukan harga emas)
+    #   IAU   ETF emas, harga 82    (bukan harga emas)
+    #   ^XAU  indeks saham TAMBANG, sama sekali bukan emas
+    #   GOLD  saham Barrick Gold, sama sekali bukan emas
+    #
+    # GC=F harganya per ons persis seperti XAUUSD, jadi angka sinyalnya
+    # langsung bisa dibaca. Bedanya dengan XAUUSD spot di broker: GC=F itu
+    # kontrak berjangka, jadi ada pergantian kontrak yang kadang membuat
+    # lompatan harga, dan jam perdagangannya sedikit berbeda. Untuk arah
+    # dan level, keduanya bergerak nyaris sama.
+    # sesi_utc = jam ramai untuk simbol ini, dipakai strategi scalping.
+    # Data disimpan dalam UTC, sedangkan jam yang lazim disebut orang itu WIB.
+    # WIB = UTC + 7.
+    # tradingview = kode simbol yang sama di TradingView, dipakai penyaring
+    # konfirmasi. Emas ada di grup "cfd", bukan "forex" — sudah diuji.
+    - {simbol: "GC=F",     pip: 0.1,    spread_pip: 3,
+       sesi_utc: [12, 16],      # 19:00-23:00 WIB, overlap London-New York
+       tradingview: "OANDA:XAUUSD"}
+    - {simbol: "GBPUSD=X", pip: 0.0001, spread_pip: 2.0,
+       sesi_utc: [7, 10],       # 14:00-17:00 WIB, London dibuka
+       tradingview: "FX:GBPUSD"}
+
+    # Dilepas 12 September 2026, disimpan kalau suatu saat mau dipakai lagi.
+    # Datanya masih ada di database, jadi tinggal dibuka tanda pagarnya.
+    # Hasil periode baru, harian, ikut_tren, saat masih ikut:
+    #   EURUSD=X  -1,64%/tahun   (paling merugi)
+    #   USDJPY=X  +0,37%/tahun
+    #   USDIDR=X  -0,81%/tahun
+    # - {simbol: "EURUSD=X", pip: 0.0001, spread_pip: 1.5}
+    # - {simbol: "USDJPY=X", pip: 0.01,   spread_pip: 1.5}
+    # - {simbol: "USDIDR=X", pip: 1.0,    spread_pip: 15}
+
+# Panjang riwayat yang tersedia dari Yahoo, diuji langsung:
+#
+#   harian    sangat panjang (GC=F sejak 2000, GBPUSD sejak 2003)
+#   4jam      730 hari
+#   1jam      730 hari
+#   30menit    60 hari
+#   15menit    60 hari   <- GC=F 4.578 lilin, GBPUSD 5.688 lilin
+#   5menit     60 hari
+#
+# PERHATIKAN 60 HARI ITU. Pemisah periode backtest ada di 2023-01-01, jadi
+# uji dua periode — aturan penerimaan yang dipakai di seluruh project ini —
+# MUSTAHIL diterapkan di timeframe di bawah 1 jam. Apa pun hasil backtest
+# 15 menit, itu pemeriksaan kasar, bukan bukti.
+strategi:
+  ikut_tren:
+    harian:
+      sma_cepat: 20
+      sma_lambat: 50
+      sma_tren: 200
+      rsi_periode: 14
+      rsi_maks_beli: 70
+      atr_periode: 14
+      atr_pengali_stop: 3.0
+    4jam: &tren_intraday
+      sma_cepat: 21
+      sma_lambat: 55
+      sma_tren: 200
+      rsi_periode: 14
+      rsi_maks_beli: 75
+      atr_periode: 14
+      atr_pengali_stop: 2.5
+    1jam: *tren_intraday
+    30menit: *tren_intraday
+    15menit: *tren_intraday
+
+  balik_rata2:
+    harian: &balik_dasar
+      bb_periode: 20
+      bb_k: 2.0
+      rsi_periode: 14
+      rsi_maks_beli: 30        # beli saat RSI di bawah 30; sisi jual otomatis 70
+      sma_tren: 200
+      atr_periode: 14
+      atr_pengali_stop: 2.0
+    4jam: *balik_dasar
+    1jam: *balik_dasar
+    30menit: *balik_dasar
+    15menit: *balik_dasar
+
+  tembus_batas:
+    harian: &tembus_dasar
+      donchian_masuk: 20       # tembus tertinggi 20 lilin = sinyal masuk
+      donchian_keluar: 10      # tembus terendah 10 lilin = sinyal keluar
+      sma_tren: 200
+      atr_periode: 14
+      atr_pengali_stop: 3.0
+    4jam: *tembus_dasar
+    1jam: *tembus_dasar
+    30menit: *tembus_dasar
+    15menit: *tembus_dasar
+
+  struktur_harga:
+    harian: &struktur_dasar
+      pivot_kiri: 3
+      pivot_kanan: 3
+      toleransi_atr: 0.5
+      maks_uji: 5
+      maks_level: 10
+      min_uji: 2
+      dekat_atr: 0.5
+      penyangga_atr: 0.5
+      rr_minimal: 2.0
+      rsi_periode: 14
+      rsi_batas_beli: 40
+      macd_cepat: 12
+      macd_lambat: 26
+      macd_signal: 9
+      volume_periode: 20
+      volume_pengali: 1.5
+      sma_tren: 200
+      atr_periode: 14
+      atr_pengali_stop: 3.0
+    4jam: *struktur_dasar
+    1jam: *struktur_dasar
+    30menit: *struktur_dasar
+    15menit: *struktur_dasar
+
+  # Teknik dari "Ringkasan_Teknik_Scalping_XAUUSD_GBPUSD.pdf":
+  # timeframe besar jadi PETA (menentukan arah), timeframe kecil jadi
+  # EKSEKUSI (menentukan titik masuk). Entry yang melawan peta tidak pernah
+  # diambil, sebagus apa pun tampilan lilin di timeframe kecil.
+  #
+  # aturan_atas menentukan peta dipakai dari mana, dan itu HARUS lebih besar
+  # dari timeframe yang dijalankan:
+  #     dijalankan di 15menit  -> peta "1h"   (sesuai dokumen: H1 -> M15)
+  #     dijalankan di 1jam     -> peta "4h"
+  #
+  # Blok 1jam ada supaya logikanya bisa diuji pada 730 hari data. Yang
+  # 15 menit hanya punya 60 hari dari Yahoo — terlalu pendek untuk
+  # menyimpulkan apa pun, jadi ujilah bentuknya di 1jam lebih dulu.
+  scalping_h1_m15:
+    15menit:
+      aturan_atas: "1h"        # peta H1, eksekusi M15 — persis dokumen
+      ema_cepat: 50            # EMA 50/200 di peta, seperti diminta dokumen
+      ema_lambat: 200
+      pivot_kiri: 2            # titik ayun; 2 cukup rapat untuk timeframe kecil
+      pivot_kanan: 2
+      toleransi_atr: 0.5
+      maks_uji: 5
+      maks_level: 10
+      dekat_atr: 0.5           # "sampai di" level kecil
+      dekat_atr_atas: 1.5      # level peta lebih kasar, wajar lebih longgar
+      pin_rasio_ekor: 2.0      # ekor minimal 2x badan
+      pin_maks_badan: 0.35     # badan maksimal 35% rentang lilin
+      penyangga_atr: 0.5       # batas rugi di LUAR ekor lilin konfirmasi
+      rr_minimal: 1.5          # dokumen: minimal 1:1,5 sampai 1:2
+      atr_periode: 14
+      atr_pengali_stop: 2.0    # cadangan, dipakai kalau stop struktural gagal
+    1jam:
+      aturan_atas: "4h"        # peta H4, eksekusi H1
+      ema_cepat: 50
+      ema_lambat: 200
+      pivot_kiri: 2
+      pivot_kanan: 2
+      toleransi_atr: 0.5
+      maks_uji: 5
+      maks_level: 10
+      dekat_atr: 0.5
+      dekat_atr_atas: 1.5
+      pin_rasio_ekor: 2.0
+      pin_maks_badan: 0.35
+      penyangga_atr: 0.5
+      rr_minimal: 1.5
+      atr_periode: 14
+      atr_pengali_stop: 2.0
+
+konfirmasi:
+  # PENTING UNTUK FOREX: Yahoo melaporkan volume 0 untuk SELURUH baris
+  # pasangan mata uang — EURUSD=X punya 5.908 baris dan semuanya nol.
+  # Menyalakan penyaring volume dengan lewati_jika_kosong: false akan
+  # mematikan SELURUH sinyal robot ini. Hanya emas (GC=F) yang punya volume
+  # sungguhan, karena itu kontrak berjangka.
+  volume:
+    aktif: false
+    periode: 20
+    pengali: 1.5
+    lewati_jika_kosong: true
+
+  macd:
+    aktif: false
+    cepat: 12
+    lambat: 26
+    signal: 9
+
+  # ====================================================================
+  # KONFIRMASI TRADINGVIEW — SATU-SATUNYA PENYARING YANG TIDAK BISA DIUJI
+  # ====================================================================
+  # TradingView tidak menyediakan riwayat harga ke publik (sudah diuji: tiga
+  # alamat riwayat menjawab 404/403). Yang bisa dibaca hanya nilai SAAT INI.
+  #
+  # Artinya penyaring ini TIDAK BISA DI-BACKTEST. Seluruh project ini
+  # berjalan dengan aturan "backtest yang memutuskan", dan ini satu-satunya
+  # bagian yang berada di luar aturan itu. Menyalakannya berarti menerima
+  # sesuatu yang belum pernah diukur untung-ruginya.
+  #
+  # Gunanya: harga emas di Yahoo (GC=F, berjangka) berbeda ~40 poin dari
+  # XAUUSD spot di chart Anda. Penyaring ini membaca angka yang sama persis
+  # dengan yang Anda lihat, lalu menahan sinyal yang arahnya bertentangan.
+  #
+  # Kalau TradingView tidak bisa dibaca (jaringan putus, simbol salah),
+  # sinyal TETAP DIKIRIM. Penyaring yang rusak tidak boleh membungkam robot.
+  tradingview:
+    aktif: false
+    ambang: 0.1       # Recommend.All dari -1 sampai +1; di bawah ini = ragu
+
+  rr_minimal: 0.0
+  penyangga_atr: 0.5
+  pivot_kiri: 3
+  pivot_kanan: 3
+  tunda_lilin: 0
+
+backtest:
+  modal: 10000000                    # modal per simbol, agar perbandingan adil
+  risiko_per_transaksi_persen: 1.0   # kerugian maksimal tiap kali kena stop
+  tanggal_pisah: "2023-01-01"
+
+notifikasi:
+  # Robot crypto dan robot forex memakai bot Telegram yang sama, jadi judul
+  # yang berbeda membuat keduanya bisa dibedakan sekilas di daftar obrolan
+  # tanpa perlu dibuka dulu.
+  judul: "Sinyal Forex"
+
+  # Bot Telegram yang SEHARUSNYA dipakai robot ini. Hanya untuk memeriksa,
+  # tidak untuk mengirim — yang menentukan tujuan tetap token di .env.
+  #
+  # Gunanya menangkap token yang tertukar antar robot. Kalau token saham
+  # tidak sengaja tertempel di sini, pesannya tetap terkirim tanpa galat
+  # apa pun, hanya masuk ke chat yang salah — persis jenis kesalahan yang
+  # baru ketahuan berhari-hari kemudian. Dengan baris ini,
+  # cek_telegram.py dan pasang_token.sh langsung menolaknya.
+  bot_username: nouvaf_bot
+
+  # Sengaja true untuk jadwal harian: kalau robot hanya bersuara saat ada
+  # sinyal, Anda tidak bisa membedakan "tidak ada sinyal" dari "robot mati".
+  # Jadwal tiap jam memakai --diam-jika-kosong supaya tidak membanjiri.
+  kirim_walau_kosong: true
+  # Dinaikkan dari 3 ke 12: 3 terlalu tipis untuk timeframe rendah.
+  lilin_terakhir_diperiksa: 12
+
+  # Sinyal MASUK yang lebih tua dari sekian lilin tidak dikirim, karena harga
+  # dan batas rugi di pesan dihitung dari lilin saat sinyal muncul. Sinyal
+  # KELUAR tidak pernah dibatasi umurnya. -1 untuk mematikan.
+  maks_umur_lilin_masuk: 3
+  lacak_posisi: true
+  tahan_sinyal_masuk: false
+
+data:
+  db_path: data/forex.db

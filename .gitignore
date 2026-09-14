@@ -1,0 +1,13 @@
+.env
+# Salinan cadangan .env (mis. .env.bak) juga berisi token — pernah ditemukan
+# satu di VPS. Hanya contoh kosongnya yang boleh ikut.
+.env.*
+!.env.example
+data/
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.bak
+# Dokumen referensi pribadi, tidak ikut dipublikasikan
+*.pdf
